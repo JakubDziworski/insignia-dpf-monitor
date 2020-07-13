@@ -58,16 +58,13 @@ void connect() {
 }
 
 void printRegenerating(int32_t regenStatus) {
-  int32_t dirtLevel = getDpfDirtLevel();
-  String statusMessage = "STATUS: ";
-  statusMessage = statusMessage + regenStatus;
-  String dirtLevelMessage = "FILL: ";
-  dirtLevelMessage = dirtLevelMessage + dirtLevel;
+  String statusMessage = "      ";
+  statusMessage = statusMessage + regenStatus + "%      ";
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print(statusMessage);
+  lcd.print("!!REGENERATING!!");
   lcd.setCursor(0,1);
-  lcd.print(dirtLevelMessage);
+  lcd.print(statusMessage);
   lcd.noBacklight();
   delay(200);
   lcd.backlight();
@@ -166,6 +163,7 @@ boolean isBtConfBtnPressed() {
   return digitalRead(btConfBtn) == LOW;
 }
 
+//##### AUTOCONFIGURATION SECTION #########
 void pairWithVgate()
 {
     lcd.clear();
