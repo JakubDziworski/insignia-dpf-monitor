@@ -58,8 +58,9 @@ void connect() {
 }
 
 void printRegenerating(int32_t regenStatus) {
+  int32_t percentRegenerated = map(val, 0, 255, 0, 100);
   String statusMessage = "      ";
-  statusMessage = statusMessage + regenStatus + "%      ";
+  statusMessage = statusMessage + percentRegenerated + "%      ";
   lcd.clear();
   lcd.setCursor(0,0);
   lcd.print("!!REGENERATING!!");
