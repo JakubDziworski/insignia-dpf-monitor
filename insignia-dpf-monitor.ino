@@ -28,12 +28,13 @@ void loop()
     delay(1000);
     return;
   }
-  int32_t regenStatus = getRegenerationStatus();
+  String voltage = getVoltage();
+  regenStatus = getRegenerationStatus();
   if(regenStatus > 0) {
     printRegenerating(regenStatus);
     return;
   }
-  printDpfStatus();
+  printDpfStatus(voltage);
   delay(1000);
 }
 
@@ -58,7 +59,7 @@ void connect() {
 }
 
 void printRegenerating(int32_t regenStatus) {
-  int32_t percentRegenerated = map(val, 0, 255, 0, 100);
+  int32_t percentRegenerated = map(regenStatus, 0, 255, 0, 100);
   String statusMessage = "      ";
   statusMessage = statusMessage + percentRegenerated + "%      ";
   lcd.clear();
@@ -72,69 +73,97 @@ void printRegenerating(int32_t regenStatus) {
   delay(200);
 }
 
-void printDpfStatus() {
+void printDpfStatus(String voltage) {
   int32_t kmsSinceDpf = getKmsSinceDpf();
   int32_t dirtLevel = getDpfDirtLevel();
   lcd.clear();
   lcd.setCursor(0,0);
   String message = "LAST: ";
   message = message + kmsSinceDpf + "KM";
-  Serial.println(message);
   lcd.print(message);
   lcd.setCursor(0,1);
   message = "FILL: ";
   message = message + dirtLevel + "%";
   lcd.print(message);
+  lcd.setCursor(11,1);
+  message = voltage + "V";
+  lcd.print(message);
 }
 
 int32_t getRegenerationStatus() {
-  return queryVgate(0x22, 0x3274);
+  return queryPID(0x22, 0x3274);
 }
 
 int32_t getKmsSinceDpf() {
-  return queryVgate(0x22, 0x3277);
+  return queryPID(0x22, 0x3277);
 }
 
 int32_t getDpfDirtLevel() {
-  return queryVgate(0x22, 0x3275);
+  return queryPID(0x22, 0x3275);
 }
 
+int32_t getEngineLoad() {
+  return queryPID(0x22, 0x0004);
+}
 
-int32_t queryVgate(uint8_t service, uint16_t pid) {
-  Serial.print("Response for ");
-  Serial.print(pid);
-  Serial.print(": ");
-  if (vgate.queryPID(service, pid))
-  {
-    int32_t response = vgate.findResponse();
-    if (vgate.status == ELM_SUCCESS)
-    {
-      Serial.print("SUCCESS:"); Serial.println(response);
-      return response;
-    }
-    else if (vgate.status == ELM_NO_RESPONSE)
-      Serial.println("ERROR: ELM_NO_RESPONSE");
-    else if (vgate.status == ELM_BUFFER_OVERFLOW)
-      Serial.println("ERROR: ELM_BUFFER_OVERFLOW");
-    else if (vgate.status == ELM_GARBAGE)
-      Serial.println("ERROR: ELM_GARBAGE");
-    else if (vgate.status == ELM_UNABLE_TO_CONNECT)
-      Serial.println("ERROR: ELM_UNABLE_TO_CONNECT");
-    else if (vgate.status == ELM_NO_DATA)
-      Serial.println("ERROR: ELM_NO_DATA");
-    else if (vgate.status == ELM_STOPPED)
-      Serial.println("ERROR: ELM_STOPPED");
-    else if (vgate.status == ELM_TIMEOUT)
-      Serial.println("ERROR: ELM_TIMEOUT");
-    else if (vgate.status == ELM_GENERAL_ERROR)
-      Serial.println("ERROR: ELM_GENERAL_ERROR");
-    else {
-      Serial.print("ERROR: UNKNOWN ELM STATUS:");
-      Serial.println(vgate.status);
+int32_t getOilPressure() {
+  return queryPID(0x22, 0x1470);
+}
+
+String getVoltage() {
+  int32_t resp = queryCommand(READ_VOLTAGE);
+  if(resp == -1) {
+    return "-1";
+  }
+  String result;
+  for(int i =0; i<vgate.recBytes; i++) {
+    char character = vgate.payload[i];
+    if(isDigit(character) || character == '.') { //sometimes there is some garbage chars in response
+      result += character;
     }
   }
+  return result;
+}
+
+int32_t queryPID(uint8_t service, uint16_t pid) {
+  int8_t result = vgate.queryPID(service, pid);
+  return handleResponse(pid,result);
+}
+
+int32_t queryCommand(const char* command) {
+  int8_t result = vgate.sendCommand(command);
+  return handleResponse(command, result);
+}
+
+int32_t handleResponse(const char* command, uint8_t result) {
+  Serial.print("Response for ");
+  Serial.print(command);
+  Serial.print(": ");
+  if (vgate.status == ELM_SUCCESS)
+  {
+    int32_t response = vgate.findResponse();
+    Serial.print("SUCCESS:"); Serial.println(response);
+    return response;
+  }
+  else if (vgate.status == ELM_NO_RESPONSE)
+    Serial.println("ERROR: ELM_NO_RESPONSE");
+  else if (vgate.status == ELM_BUFFER_OVERFLOW)
+    Serial.println("ERROR: ELM_BUFFER_OVERFLOW");
+  else if (vgate.status == ELM_GARBAGE)
+    Serial.println("ERROR: ELM_GARBAGE");
+  else if (vgate.status == ELM_UNABLE_TO_CONNECT)
+    Serial.println("ERROR: ELM_UNABLE_TO_CONNECT");
+  else if (vgate.status == ELM_NO_DATA)
+    Serial.println("ERROR: ELM_NO_DATA");
+  else if (vgate.status == ELM_STOPPED)
+    Serial.println("ERROR: ELM_STOPPED");
+  else if (vgate.status == ELM_TIMEOUT)
+    Serial.println("ERROR: ELM_TIMEOUT");
+  else if (vgate.status == ELM_GENERAL_ERROR)
+    Serial.println("ERROR: ELM_GENERAL_ERROR");
   else {
-    Serial.println("NOT CONNECTED");
+    Serial.print("ERROR: UNKNOWN ELM STATUS:");
+    Serial.println(vgate.status);
   }
   return -1;
 }
