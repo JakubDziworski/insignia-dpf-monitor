@@ -2,10 +2,14 @@
 #include <LiquidCrystal_I2C.h>
 #include <SoftwareSerial.h>
 #include "ELMduino.h"
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>    // Core graphics library
+#include <Adafruit_ST7735.h> // Hardware-specific library for ST7735
 
 LiquidCrystal_I2C lcd(0x27,20,4);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 ELM327 vgate;
-SoftwareSerial vgateSerial(10, 7);
+SoftwareSerial vgateSerial(12, 7);
 
 const long debugRate = 115200;
 
@@ -14,6 +18,7 @@ void setup()
   Serial.begin(debugRate);
   Serial.println("START");
   setupBt();
+  setupTFT();
   lcd.init();
   lcd.backlight();
 }
@@ -29,13 +34,14 @@ void loop()
     return;
   }
   String voltage = getVoltage();
-  regenStatus = getRegenerationStatus();
+  printFrontLcd();
+  int32_t regenStatus = getRegenerationStatus();
   if(regenStatus > 0) {
     printRegenerating(regenStatus);
     return;
   }
   printDpfStatus(voltage);
-  delay(1000);
+  delay(100);
 }
 
 void connect() {
@@ -90,6 +96,16 @@ void printDpfStatus(String voltage) {
   lcd.print(message);
 }
 
+int32_t lastPressure = 0;
+void printFrontLcd() {
+  int32_t oilPressure = getOilPressure();
+  if(lastPressure == oilPressure) {
+    return;
+  }
+  uint32_t rpm = vgate.rpm();
+  printOilPressure(oilPressure, rpm, false);
+}
+
 int32_t getRegenerationStatus() {
   return queryPID(0x22, 0x3274);
 }
@@ -102,12 +118,8 @@ int32_t getDpfDirtLevel() {
   return queryPID(0x22, 0x3275);
 }
 
-int32_t getEngineLoad() {
-  return queryPID(0x22, 0x0004);
-}
-
 int32_t getOilPressure() {
-  return queryPID(0x22, 0x1470);
+  return queryPID(0x22, 0x1470)*4;
 }
 
 String getVoltage() {
@@ -169,8 +181,46 @@ int32_t handleResponse(const char* command, uint8_t result) {
 }
 
 
+//##### TFT SECTION #########
+
+#define TFT_CS        10
+#define TFT_RST        8 // Or set to -1 and connect to Arduino RESET pin
+#define TFT_DC         9
+
+Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
 
+void setupTFT() {
+  tft.initR(INITR_BLACKTAB);
+  tft.fillScreen(ST77XX_WHITE);
+  tft.setRotation(1);
+  tft.setTextWrap(false);
+}
+
+
+void drawProgressBar(float value, float maxValue, int x, int y, int w, int h, const char* unit, uint16_t color,unsigned const int decimal_places) {
+    int progress = min(w,(value/maxValue)*w);
+    tft.fillRect(x,y,progress,h,color);
+    tft.fillRect(x+progress,y,w-progress,h,tft.color565(180,180,180));
+    tft.setTextSize(3);
+    tft.setTextColor(ST77XX_WHITE);
+    int16_t  tx, ty;
+    uint16_t tw, th;
+    tft.getTextBounds(String(value,decimal_places), x+w/2, y+h/2, &tx, &ty, &tw, &th);
+    tft.setCursor(x+w/2-tw/2, y+h/2-th/2);
+    tft.print(value,decimal_places);
+    tft.setTextSize(1);
+    tft.getTextBounds(unit, x+w/2, y+h/2, &tx, &ty, &tw, &th);
+    tft.setCursor(x+w-tw-2,y+2);
+    tft.print(unit);
+    tft.drawRoundRect(x-1, y-1, w+2, h+2, 3, tft.color565(234, 234, 234));
+}
+
+
+void printOilPressure(int pressure, int rpm, bool is_critical) {
+  drawProgressBar(pressure, 500, 5,5,tft.width() - 10, tft.height()/2-10, "KPA", tft.color565(0, 168, 87),0);
+  drawProgressBar((float)pressure/(float)rpm, 0.5f, 5, tft.height()/2+5, tft.width() - 10, tft.height()/2-10, "KPA/RPM", tft.color565(0, 140, 168),2);
+}
 
 //##### BLUETOOTH AUTOCONFIGURATION SECTION #########
 const int btConfPin = 3 ;
