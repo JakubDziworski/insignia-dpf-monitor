@@ -29,6 +29,8 @@ void loop()
     pairWithVgate();
   }
   if(!vgate.connected) {
+    setup();
+    resetBt();
     connect();
     delay(1000);
     return;
@@ -48,6 +50,7 @@ void connect() {
   lcd.clear();
   lcd.setCursor(0,0);
   lcd.print("CONNECTING...");
+  printTFTMessage("CONNECTING");
   lcd.setCursor(0,1);
   if (!vgate.begin(vgateSerial))
   {
@@ -60,6 +63,7 @@ void connect() {
     lcd.print("UNABLE TO SET AT SH 7E0");
     return;
   }
+  setupTFT();
   lcd.print("CONNECTED");
   Serial.println("Connected to OBD scanner");
 }
@@ -82,26 +86,26 @@ void printRegenerating(int32_t regenStatus) {
 void printDpfStatus(String voltage) {
   int32_t kmsSinceDpf = getKmsSinceDpf();
   int32_t dirtLevel = getDpfDirtLevel();
+  int32_t oilPressure = getOilPressure();
+  uint32_t rpm = vgate.rpm();
   lcd.clear();
   lcd.setCursor(0,0);
   String message = "LAST: ";
-  message = message + kmsSinceDpf + "KM";
+  message = message + kmsSinceDpf + "KM " + voltage + "V";
   lcd.print(message);
   lcd.setCursor(0,1);
   message = "FILL: ";
-  message = message + dirtLevel + "%";
-  lcd.print(message);
-  lcd.setCursor(11,1);
-  message = voltage + "V";
+  message = message + dirtLevel + "% " + rpm + "RPM";
   lcd.print(message);
 }
 
-int32_t lastPressure = 0;
+int32_t lastPressure = -5;
 void printFrontLcd() {
   int32_t oilPressure = getOilPressure();
   if(lastPressure == oilPressure) {
     return;
   }
+  lastPressure = oilPressure;
   uint32_t rpm = vgate.rpm();
   printOilPressure(oilPressure, rpm, false);
 }
@@ -119,7 +123,7 @@ int32_t getDpfDirtLevel() {
 }
 
 int32_t getOilPressure() {
-  return queryPID(0x22, 0x1470)*4;
+  return queryPID(0x22, 0x1470)*4-100;
 }
 
 String getVoltage() {
@@ -192,11 +196,21 @@ Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
 void setupTFT() {
   tft.initR(INITR_BLACKTAB);
-  tft.fillScreen(ST77XX_WHITE);
+  tft.fillScreen(tft.color565(15,15,15));
   tft.setRotation(1);
   tft.setTextWrap(false);
 }
 
+
+void printTFTMessage(const char* command) {
+    int16_t  tx, ty;
+    uint16_t tw, th;
+    tft.setTextSize(2);
+    tft.getTextBounds(command, tft.width()/2, tft.height()/2, &tx, &ty, &tw, &th);
+    tft.setTextColor(ST77XX_WHITE);
+    tft.setCursor(tft.width()/2-tw/2, tft.height()/2-th/2);
+    tft.print(command);
+}
 
 void drawProgressBar(float value, float maxValue, int x, int y, int w, int h, const char* unit, uint16_t color,unsigned const int decimal_places) {
     int progress = min(w,(value/maxValue)*w);
@@ -236,6 +250,13 @@ void setupBt() {
   pinMode(btConfBtn, INPUT_PULLUP);
   digitalWrite(btPowerPin, HIGH);
   digitalWrite(btConfPin, LOW);
+}
+
+void resetBt() {
+  digitalWrite(btPowerPin, LOW);
+  delay(500);
+  digitalWrite(btPowerPin, HIGH);
+  delay(500);
 }
 
 boolean isBtConfBtnPressed() {
