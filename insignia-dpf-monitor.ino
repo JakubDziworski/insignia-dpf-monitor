@@ -194,7 +194,7 @@ void pairWithVgate()
     lcd.print("DONE");
     delay(3000);
     vgateSerial.end();
-    vgateSerial.begin(confRate);
+    vgateSerial.begin(vgateRate);
 
     digitalWrite(btPowerPin, LOW);
     digitalWrite(btConfPin, LOW);
